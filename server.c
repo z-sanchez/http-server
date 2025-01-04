@@ -1,9 +1,11 @@
+// gcc server.c -o server
+
 #include "server.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
-#include <arpa/inet.h>
+#include <arpa/inet.h> // Address manipulation functions
 
 #define PORT 6969
 #define BUFFER_SIZE 1024

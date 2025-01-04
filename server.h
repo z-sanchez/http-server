@@ -1,8 +1,8 @@
 #ifndef SERVER_H
 #define SERVER_H
 
-#include <sys/socket.h>
-#include <netinet/in.h>
+#include <sys/socket.h> // Core socket functions
+#include <netinet/in.h> // Internet address structures and constants
 
 struct Server
 {
