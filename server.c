@@ -1,4 +1,4 @@
-
+#include "server.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -31,6 +31,53 @@ char *parse_request(char *request)
     return method_copy;
 }
 
+struct Server server_constructor(int domain, u_long interface, int port)
+{
+    struct Server server;
+    server.domain = domain;
+    server.interface = interface;
+    server.port = port;
+
+    server.server_addr.sin_family = server.domain;
+    server.server_addr.sin_addr.s_addr = server.interface;
+    server.server_addr.sin_port = htons(server.port);
+
+    server.socket = socket(AF_INET, SOCK_STREAM, 0);
+
+    if (server.socket < 0)
+    {
+        perror("socket failed");
+        exit(EXIT_FAILURE);
+    }
+
+    // Set SO_REUSEADDR to allow immediate rebinding
+    int opt = 1;
+    if (setsockopt(server.socket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) == -1)
+    {
+        perror("setsockopt failed");
+        close(server.socket);
+        exit(EXIT_FAILURE);
+    }
+
+    // bind server fd and socket config
+    if (bind(server.socket, (struct sockaddr *)&server.server_addr, sizeof(server.server_addr)) < 0)
+    {
+        perror("bind failed");
+        exit(EXIT_FAILURE);
+    }
+
+    // listen for connections with max at 10
+    if (listen(server.socket, 10) < 0)
+    {
+        perror("bind failed");
+        exit(EXIT_FAILURE);
+    }
+
+    printf("Server listening on port %d\n", PORT);
+
+    return server;
+}
+
 void handle_client(int *client_fd, char *buffer)
 {
     char *method = parse_request(buffer);
@@ -60,48 +107,8 @@ void handle_client(int *client_fd, char *buffer)
 
 int main()
 {
-    // server file descriptor
-    int server_fd;
-    struct sockaddr_in server_addr;
-
     // AF_INET = IPv4, SOCK_STREAM = TCP, protocol number (0 for standard sockets)
-    server_fd = socket(AF_INET, SOCK_STREAM, 0);
-
-    if (server_fd < 0)
-    {
-        perror("socket failed");
-        exit(EXIT_FAILURE);
-    }
-
-    // Set SO_REUSEADDR to allow immediate rebinding
-    int opt = 1;
-    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) == -1)
-    {
-        perror("setsockopt failed");
-        close(server_fd);
-        exit(EXIT_FAILURE);
-    }
-
-    // config socket
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_addr.s_addr = INADDR_ANY;
-    server_addr.sin_port = htons(PORT);
-
-    // bind server fd and socket config
-    if (bind(server_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
-    {
-        perror("bind failed");
-        exit(EXIT_FAILURE);
-    }
-
-    // listen for connections with max at 10
-    if (listen(server_fd, 10) < 0)
-    {
-        perror("bind failed");
-        exit(EXIT_FAILURE);
-    }
-
-    printf("Server listening on port %d\n", PORT);
+    struct Server server = server_constructor(AF_INET, INADDR_ANY, PORT);
 
     while (1)
     {
@@ -120,7 +127,7 @@ int main()
         }
 
         // setting file descriptor after accepting connection
-        *client_fd = accept(server_fd, (struct sockaddr *)&client_addr, &client_addr_len);
+        *client_fd = accept(server.socket, (struct sockaddr *)&client_addr, &client_addr_len);
 
         if (*client_fd < 0)
         {
