@@ -3,16 +3,19 @@
 
 #include <sys/socket.h> // Core socket functions
 #include <netinet/in.h> // Internet address structures and constants
+#include <netdb.h>
 
 struct Server
 {
     int socket;
     struct sockaddr_in server_addr;
+    struct addrinfo hints;
+    struct addrinfo *res;
     int domain;
     u_long interface;
-    int port;
+    char *port;
 };
 
-struct Server server_constructor(int domain, u_long interface, int port);
+struct Server server_constructor(int domain, u_long interface, char *port);
 
 #endif

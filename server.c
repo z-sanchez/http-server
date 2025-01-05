@@ -7,7 +7,7 @@
 #include <string.h>
 #include <arpa/inet.h> // Address manipulation functions
 
-#define PORT 6969
+#define PORT "6969"
 #define BUFFER_SIZE 1024
 
 char *parse_request(char *request)
@@ -33,18 +33,21 @@ char *parse_request(char *request)
     return method_copy;
 }
 
-struct Server server_constructor(int domain, u_long interface, int port)
+struct Server server_constructor(int domain, u_long interface, char *port)
 {
     struct Server server;
     server.domain = domain;
     server.interface = interface;
     server.port = port;
 
-    server.server_addr.sin_family = server.domain;
-    server.server_addr.sin_addr.s_addr = server.interface;
-    server.server_addr.sin_port = htons(server.port);
+    memset(&server.hints, 0, sizeof server.hints);
+    server.hints.ai_family = server.domain;
+    server.hints.ai_socktype = server.interface;
+    server.hints.ai_flags = AI_PASSIVE;
 
-    server.socket = socket(AF_INET, SOCK_STREAM, 0);
+    getaddrinfo(NULL, "6969", &server.hints, &server.res);
+
+    server.socket = socket(server.res->ai_family, server.res->ai_socktype, server.res->ai_protocol);
 
     if (server.socket < 0)
     {
@@ -62,20 +65,26 @@ struct Server server_constructor(int domain, u_long interface, int port)
     }
 
     // bind server fd and socket config
-    if (bind(server.socket, (struct sockaddr *)&server.server_addr, sizeof(server.server_addr)) < 0)
+    if (bind(server.socket, server.res->ai_addr, server.res->ai_addrlen) < 0)
     {
         perror("bind failed");
         exit(EXIT_FAILURE);
     }
+
+    // if (connect(server.socket, server.res->ai_addr, server.res->ai_addrlen) < 0)
+    // {
+    //     perror("connect failed");
+    //     exit(EXIT_FAILURE);
+    // }
 
     // listen for connections with max at 10
     if (listen(server.socket, 10) < 0)
     {
-        perror("bind failed");
+        perror("listen failed");
         exit(EXIT_FAILURE);
     }
 
-    printf("Server listening on port %d\n", PORT);
+    printf("Server listening on port %s\n", (char *)PORT);
 
     return server;
 }
@@ -110,7 +119,7 @@ void handle_client(int *client_fd, char *buffer)
 int main()
 {
     // AF_INET = IPv4, SOCK_STREAM = TCP, protocol number (0 for standard sockets)
-    struct Server server = server_constructor(AF_INET, INADDR_ANY, PORT);
+    struct Server server = server_constructor(AF_UNSPEC, SOCK_STREAM, (char *)PORT);
 
     while (1)
     {
