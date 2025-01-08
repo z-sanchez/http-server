@@ -30,6 +30,37 @@ int junk_function()
     return 3;
 }
 
+void print_ip(struct sockaddr_storage *client_addr)
+{
+    printf("Connection accepted from CLIENT IP: ");
+    if (client_addr->ss_family == AF_INET)
+    {
+        char ip4[INET_ADDRSTRLEN];
+        struct sockaddr_in *addr = (struct sockaddr_in *)client_addr;
+
+        int client_port = ntohs(addr->sin_port);
+        inet_ntop(AF_INET, &(addr->sin_addr), ip4, INET_ADDRSTRLEN);
+
+        printf("%s:%d\n", ip4, client_port);
+        return;
+    }
+
+    if (client_addr->ss_family == AF_INET6)
+    {
+        char ip6[INET6_ADDRSTRLEN];
+        struct sockaddr_in6 *addr = (struct sockaddr_in6 *)client_addr;
+
+        int client_port = ntohs(addr->sin6_port);
+        inet_ntop(AF_INET6, &addr->sin6_addr, ip6, sizeof(ip6));
+
+        printf("%s:%d...\n", ip6, client_port);
+        return;
+    }
+
+    printf("Unknown???? \n");
+    return;
+}
+
 char *parse_request(char *request)
 {
     char method[16];   // Buffer to hold the HTTP method
@@ -139,7 +170,7 @@ int main()
 
     while (1)
     {
-        struct sockaddr_in client_addr;
+        struct sockaddr_storage client_addr;
         socklen_t client_addr_len = sizeof(client_addr);
         // buffer for reading request
         char buffer[BUFFER_SIZE];
@@ -163,9 +194,7 @@ int main()
             continue;
         }
 
-        printf("Connection accepted from client IP %s:%d...\n",
-               // pretty sure we can use something easier here with getaddrinfo
-               inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
+        print_ip(&client_addr);
 
         memset(buffer, 0, BUFFER_SIZE);
 
@@ -180,6 +209,8 @@ int main()
         // Free allocated memory
         free(client_fd);
     }
+
+    freeaddrinfo(server.res);
 
     return 0;
 }

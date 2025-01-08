@@ -14,3 +14,4 @@ New To Me
 - perror
 - getaddrinfo vs sockaddr_in and sockaddr_in6
 - string manipulation and null-terminator
+- browser prefers ipv6 but fallbacks to ipv4
