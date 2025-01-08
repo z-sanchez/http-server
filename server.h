@@ -18,4 +18,6 @@ struct Server
 
 struct Server server_constructor(int domain, u_long interface, char *port);
 
+void log_error(int logError, char *error, void *(*func)(void));
+
 #endif

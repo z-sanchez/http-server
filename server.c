@@ -3,12 +3,32 @@
 #include "server.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 #include <string.h>
 #include <arpa/inet.h> // Address manipulation functions
 
 #define PORT "6969"
 #define BUFFER_SIZE 1024
+
+void log_error(int logError, char *error, void *(*func)(void))
+{
+    if (logError)
+    {
+        perror(error);
+        if (func)
+        {
+            func();
+        }
+        exit(EXIT_FAILURE);
+    }
+}
+
+int junk_function()
+{
+    printf("Junk Called\n");
+    return 3;
+}
 
 char *parse_request(char *request)
 {
@@ -45,7 +65,9 @@ struct Server server_constructor(int domain, u_long interface, char *port)
     server.hints.ai_socktype = server.interface;
     server.hints.ai_flags = AI_PASSIVE;
 
-    getaddrinfo(NULL, "6969", &server.hints, &server.res);
+    int status = getaddrinfo("localhost", "6969", &server.hints, &server.res);
+
+    log_error((status != 0), (char *)"getaddrinfo failed", (void *(*)(void))junk_function);
 
     server.socket = socket(server.res->ai_family, server.res->ai_socktype, server.res->ai_protocol);
 
@@ -70,12 +92,6 @@ struct Server server_constructor(int domain, u_long interface, char *port)
         perror("bind failed");
         exit(EXIT_FAILURE);
     }
-
-    // if (connect(server.socket, server.res->ai_addr, server.res->ai_addrlen) < 0)
-    // {
-    //     perror("connect failed");
-    //     exit(EXIT_FAILURE);
-    // }
 
     // listen for connections with max at 10
     if (listen(server.socket, 10) < 0)
@@ -148,6 +164,7 @@ int main()
         }
 
         printf("Connection accepted from client IP %s:%d...\n",
+               // pretty sure we can use something easier here with getaddrinfo
                inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
 
         memset(buffer, 0, BUFFER_SIZE);
