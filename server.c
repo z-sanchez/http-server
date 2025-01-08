@@ -157,7 +157,7 @@ void handle_client(int *client_fd, char *buffer)
         response = (char *)"HTTP/1.1 404 Not Found\r\n"
                            "Content-Type: text/plain\r\n"
                            "\r\n"
-                           "404 You Fucking Up My Shit";
+                           "Resource not found";
     }
 
     send(*client_fd, response, strlen(response), 0);
