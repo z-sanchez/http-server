@@ -12,3 +12,5 @@ New To Me
 - C preprocessor macros
 - Passing functions to other functions
 - perror
+- getaddrinfo vs sockaddr_in and sockaddr_in6
+- string manipulation and null-terminator
