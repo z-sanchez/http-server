@@ -50,9 +50,9 @@ void print_ip(struct sockaddr_storage *client_addr)
 
 char *parse_request(char *request)
 {
-    char method[16];   // Buffer to hold the HTTP method
-    char path[256];    // Buffer to hold the path
-    char protocol[16]; // Buffer to hold the HTTP protocol
+    static char method[16]; // Buffer to hold the HTTP method
+    char path[256];         // Buffer to hold the path
+    char protocol[16];      // Buffer to hold the HTTP protocol
 
     if (sscanf(request, "%15s %255s %15s", method, path, protocol) != 3)
     {
@@ -61,15 +61,7 @@ char *parse_request(char *request)
         return NULL;
     };
 
-    char *method_copy = (char *)malloc(strlen(method) + 1);
-    if (method_copy == NULL)
-    {
-        perror("Failed to allocate memory for method");
-        return NULL;
-    }
-
-    strcpy(method_copy, method);
-    return method_copy;
+    return method;
 }
 
 struct Server server_constructor(int domain, u_long interface, char *port)

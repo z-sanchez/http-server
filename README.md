@@ -16,3 +16,4 @@ New To Me
 - string manipulation and null-terminator
 - browser prefers ipv6 but fallbacks to ipv4
 - fprintf to stderr stream convention
+- static variables for persisting across function calls
