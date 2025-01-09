@@ -11,54 +11,41 @@
 #define PORT "6969"
 #define BUFFER_SIZE 1024
 
-void log_error(int logError, char *error, void *(*func)(void))
+void log_error(char *message, int is_fatal)
 {
-    if (logError)
+    perror(message);
+
+    if (is_fatal)
     {
-        perror(error);
-        if (func)
-        {
-            func();
-        }
         exit(EXIT_FAILURE);
     }
 }
 
-int junk_function()
-{
-    printf("Junk Called\n");
-    return 3;
-}
-
 void print_ip(struct sockaddr_storage *client_addr)
 {
-    printf("Connection accepted from CLIENT IP: ");
+    char client_ip[INET6_ADDRSTRLEN];
+    int client_port = 0;
+
     if (client_addr->ss_family == AF_INET)
     {
-        char ip4[INET_ADDRSTRLEN];
         struct sockaddr_in *addr = (struct sockaddr_in *)client_addr;
 
-        int client_port = ntohs(addr->sin_port);
-        inet_ntop(AF_INET, &(addr->sin_addr), ip4, INET_ADDRSTRLEN);
-
-        printf("%s:%d\n", ip4, client_port);
-        return;
+        client_port = ntohs(addr->sin_port);
+        inet_ntop(AF_INET, &(addr->sin_addr), client_ip, sizeof(client_ip));
     }
-
-    if (client_addr->ss_family == AF_INET6)
+    else if (client_addr->ss_family == AF_INET6)
     {
-        char ip6[INET6_ADDRSTRLEN];
         struct sockaddr_in6 *addr = (struct sockaddr_in6 *)client_addr;
 
-        int client_port = ntohs(addr->sin6_port);
-        inet_ntop(AF_INET6, &addr->sin6_addr, ip6, sizeof(ip6));
-
-        printf("%s:%d...\n", ip6, client_port);
-        return;
+        client_port = ntohs(addr->sin6_port);
+        inet_ntop(AF_INET6, &addr->sin6_addr, client_ip, sizeof(client_ip));
+    }
+    else
+    {
+        printf("Unknown address family \n");
     }
 
-    printf("Unknown???? \n");
-    return;
+    printf("\n Client connected: IP=%s, Port: %d\n\n\n", client_ip, client_port);
 }
 
 char *parse_request(char *request)
@@ -69,18 +56,19 @@ char *parse_request(char *request)
 
     if (sscanf(request, "%15s %255s %15s", method, path, protocol) != 3)
     {
-        perror("Malformed request line");
-        exit(EXIT_FAILURE);
+        // why use fprintf
+        fprintf(stderr, "Malformed request: %s\n", request);
+        return NULL;
     };
 
     char *method_copy = (char *)malloc(strlen(method) + 1);
     if (method_copy == NULL)
     {
-        perror("malloc failed");
-        exit(EXIT_FAILURE);
+        perror("Failed to allocate memory for method");
+        return NULL;
     }
-    strcpy(method_copy, method);
 
+    strcpy(method_copy, method);
     return method_copy;
 }
 
@@ -96,9 +84,11 @@ struct Server server_constructor(int domain, u_long interface, char *port)
     server.hints.ai_socktype = server.interface;
     server.hints.ai_flags = AI_PASSIVE;
 
-    int status = getaddrinfo("localhost", "6969", &server.hints, &server.res);
-
-    log_error((status != 0), (char *)"getaddrinfo failed", (void *(*)(void))junk_function);
+    if (getaddrinfo("localhost", "6969", &server.hints, &server.res) != 0)
+    {
+        perror("getaddrinfo failed");
+        exit(EXIT_FAILURE);
+    }
 
     server.socket = socket(server.res->ai_family, server.res->ai_socktype, server.res->ai_protocol);
 
@@ -121,6 +111,7 @@ struct Server server_constructor(int domain, u_long interface, char *port)
     if (bind(server.socket, server.res->ai_addr, server.res->ai_addrlen) < 0)
     {
         perror("bind failed");
+        close(server.socket);
         exit(EXIT_FAILURE);
     }
 
@@ -128,6 +119,7 @@ struct Server server_constructor(int domain, u_long interface, char *port)
     if (listen(server.socket, 10) < 0)
     {
         perror("listen failed");
+        close(server.socket);
         exit(EXIT_FAILURE);
     }
 
@@ -136,9 +128,16 @@ struct Server server_constructor(int domain, u_long interface, char *port)
     return server;
 }
 
-void handle_client(int *client_fd, char *buffer)
+void handle_client(int client_fd, char *buffer)
 {
     char *method = parse_request(buffer);
+    if (!method)
+    {
+        const char *response = "HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\n\r\nMalformed request";
+        send(client_fd, response, strlen(response), 0);
+        return;
+    }
+
     char *response;
 
     printf("Received request:\n%s\n", buffer);
@@ -160,7 +159,8 @@ void handle_client(int *client_fd, char *buffer)
                            "Resource not found";
     }
 
-    send(*client_fd, response, strlen(response), 0);
+    send(client_fd, response, strlen(response), 0);
+    free(method);
 }
 
 int main()
@@ -174,40 +174,33 @@ int main()
         socklen_t client_addr_len = sizeof(client_addr);
         // buffer for reading request
         char buffer[BUFFER_SIZE];
+        memset(buffer, 0, BUFFER_SIZE);
 
         // client file descriptor
-        int *client_fd = (int *)malloc(sizeof(int));
-
-        if (client_fd == NULL)
-        {
-            perror("Memory allocation failed");
-            continue;
-        }
-
         // setting file descriptor after accepting connection
-        *client_fd = accept(server.socket, (struct sockaddr *)&client_addr, &client_addr_len);
+        int client_fd = accept(server.socket, (struct sockaddr *)&client_addr, &client_addr_len);
 
-        if (*client_fd < 0)
+        if (client_fd < 0)
         {
             perror("Accept failed");
-            free(client_fd);
             continue;
         }
 
         print_ip(&client_addr);
 
-        memset(buffer, 0, BUFFER_SIZE);
-
         // uses file descriptor to read network communication
-        read(*client_fd, buffer, BUFFER_SIZE);
+        ssize_t bytes_read = read(client_fd, buffer, BUFFER_SIZE);
+        if (bytes_read < 0)
+        {
+            perror("Failed to read from client");
+            close(client_fd);
+            continue;
+        }
 
         handle_client(client_fd, buffer);
 
         // Close client connection
-        close(*client_fd);
-
-        // Free allocated memory
-        free(client_fd);
+        close(client_fd);
     }
 
     freeaddrinfo(server.res);
