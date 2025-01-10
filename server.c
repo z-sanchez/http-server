@@ -152,7 +152,6 @@ void handle_client(int client_fd, char *buffer)
     }
 
     send(client_fd, response, strlen(response), 0);
-    free(method);
 }
 
 int main()
