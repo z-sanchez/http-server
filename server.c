@@ -9,6 +9,7 @@
 #include <arpa/inet.h> // Address manipulation functions
 
 #define PORT "6969"
+#define CRLF "\r\n"
 #define BUFFER_SIZE 1024
 
 void log_error(char *message, int is_fatal)
@@ -45,23 +46,57 @@ void print_ip(struct sockaddr_storage *client_addr)
         printf("Unknown address family \n");
     }
 
-    printf("\n Client connected: IP=%s, Port: %d\n\n\n", client_ip, client_port);
+    printf("\nClient connected: IP=%s, Port: %d\n\n\n", client_ip, client_port);
 }
 
-char *parse_request(char *request)
+void read_line(char *buffer, char **line)
+{
+    // find crlf
+    char *crlf = strstr(buffer, CRLF);
+
+    // pointer arithmetic to find length of line
+    size_t line_length = crlf - buffer;
+
+    // allocate space accordingly
+    *line = (char *)malloc(line_length + 1);
+
+    // copy line from buffer into our line pointer
+    memcpy(*line, buffer, line_length);
+
+    // add null terminate, parenthesis because we must get dereferenced value of line first
+    (*line)[line_length] = '\0';
+
+    // Shift remaining buffer contents
+    size_t remaining_length = BUFFER_SIZE - (line_length + 2); // +2 for \r\n
+
+    memmove(buffer, crlf + 2, remaining_length); // Shift data
+    buffer[remaining_length] = '\0';             // Null-terminate the remaining buffer
+}
+
+void parse_request(char *buffer, struct RequestData *request_data)
 {
     static char method[16]; // Buffer to hold the HTTP method
     char path[256];         // Buffer to hold the path
     char protocol[16];      // Buffer to hold the HTTP protocol
+    char *line = NULL;
+    read_line(buffer, &line);
 
-    if (sscanf(request, "%15s %255s %15s", method, path, protocol) != 3)
+    if (sscanf(line, "%15s %255s %15s", method, path, protocol) != 3)
     {
         // why use fprintf
-        fprintf(stderr, "Malformed request: %s\n", request);
-        return NULL;
+        fprintf(stderr, "Malformed request: %s\n", line);
+        return;
     };
 
-    return method;
+    request_data->method = method;
+    request_data->path = path;
+    request_data->protocol = protocol;
+
+    read_line(buffer, &line);
+
+    request_data->host = strchr(line, ' ');
+    sscanf(line, "Host: %s", request_data->host);
+    // don't free line because then host will be junk, will freeing request data free the allocated line???
 }
 
 struct Server server_constructor(int domain, u_long interface, char *port)
@@ -122,8 +157,12 @@ struct Server server_constructor(int domain, u_long interface, char *port)
 
 void handle_client(int client_fd, char *buffer)
 {
-    char *method = parse_request(buffer);
-    if (!method)
+
+    struct RequestData request_data;
+
+    parse_request(buffer, &request_data);
+
+    if (!request_data.method)
     {
         const char *response = "HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\n\r\nMalformed request";
         send(client_fd, response, strlen(response), 0);
@@ -132,11 +171,12 @@ void handle_client(int client_fd, char *buffer)
 
     char *response;
 
-    printf("Received request:\n%s\n", buffer);
+    printf("Method: %s\n", request_data.method);
+    printf("Path: %s\n", request_data.path);
+    printf("Protocol: %s\n", request_data.protocol);
+    printf("Host: %s\n", request_data.host);
 
-    printf("Method: %s\n", method);
-
-    if (strcmp(method, "GET") == 0)
+    if (strcmp(request_data.method, "GET") == 0)
     {
         response = (char *)"HTTP/1.1 200 OK\r\n"
                            "Content-Type: text/plain\r\n"
@@ -180,7 +220,7 @@ int main()
         print_ip(&client_addr);
 
         // uses file descriptor to read network communication
-        ssize_t bytes_read = read(client_fd, buffer, BUFFER_SIZE);
+        ssize_t bytes_read = recv(client_fd, buffer, BUFFER_SIZE, 0);
         if (bytes_read < 0)
         {
             perror("Failed to read from client");
