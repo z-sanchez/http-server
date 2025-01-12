@@ -12,16 +12,6 @@
 #define CRLF "\r\n"
 #define BUFFER_SIZE 1024
 
-void log_error(char *message, int is_fatal)
-{
-    perror(message);
-
-    if (is_fatal)
-    {
-        exit(EXIT_FAILURE);
-    }
-}
-
 void print_ip(struct sockaddr_storage *client_addr)
 {
     char client_ip[INET6_ADDRSTRLEN];

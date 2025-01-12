@@ -22,3 +22,4 @@ New To Me
 - mutate string literal in function
 - dereference a char pointer to a char pointer (ex: (\*line)[line_length] = '\0';)
 - getting size of \*char pointerVariable
+- perror
