@@ -26,6 +26,4 @@ struct RequestData
 
 struct Server server_constructor(int domain, u_long interface, char *port);
 
-void log_error(char *message, int is_fatal);
-
 #endif
