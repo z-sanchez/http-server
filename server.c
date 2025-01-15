@@ -73,10 +73,11 @@ int read_line(char *buffer, char **line)
 
 void parse_request(char *buffer, struct RequestData *request_data)
 {
-    static char method[16]; // Buffer to hold the HTTP method
-    char path[256];         // Buffer to hold the path
-    char protocol[16];      // Buffer to hold the HTTP protocol
-    char host[24];          // Buffer to hold the HTTP host
+    // must do static here for memory to persist
+    static char method[16];   // Buffer to hold the HTTP method
+    static char path[256];    // Buffer to hold the path
+    static char protocol[16]; // Buffer to hold the HTTP protocol
+    static char host[24];     // Buffer to hold the HTTP host
     char *line = NULL;
     read_line(buffer, &line);
 
@@ -111,6 +112,97 @@ void parse_request(char *buffer, struct RequestData *request_data)
     }
 
     free(line);
+}
+
+int get_file(char *requested_path, char **file_content)
+{
+    char *path;
+    printf("Path in get file: %s\n", requested_path);
+
+    // if path is root '/' default to index.html
+    if (requested_path[0] == '/')
+    {
+        path = (char *)"./public/index.html";
+    }
+
+    // // if path is empty, default to index.html
+    // if (strlen(path) == 0)
+    // {
+    //     path = (char *)"./public/index.html";
+    // }
+
+    // open file
+    FILE *file_pointer;
+
+    file_pointer = fopen(path, "r");
+
+    // if invalid, return not found
+    if (file_pointer == NULL)
+    {
+        char error_msg[BUFFER_SIZE];
+        snprintf(error_msg, sizeof(error_msg), "Invalid Path: %s\n", requested_path);
+        perror(error_msg);
+        return 0;
+    }
+
+    fseek(file_pointer, 0, SEEK_END);
+    long file_size = ftell(file_pointer);
+    fseek(file_pointer, 0, SEEK_SET);
+
+    *file_content = (char *)malloc(file_size);
+
+    if (!file_content)
+    {
+        perror("Failed to allocate space for file content");
+        fclose(file_pointer);
+        return 0;
+    }
+
+    if (fread(*file_content, 1, file_size, file_pointer) != file_size)
+    {
+        perror("Failed to read file");
+        free(*file_content);
+        fclose(file_pointer);
+        return 0;
+    }
+
+    return 1;
+}
+
+void build_message(struct RequestData request_data, char **response_header, char **response_content)
+{
+    if (strcmp(request_data.method, "GET") == 0)
+    {
+        // printf("PATH HERE IN BUILD MESSAGE: %s\n", request_data.path);
+        char *content;
+
+        int status = get_file(request_data.path, &content);
+
+        if (status == 0)
+        {
+            *response_header = (char *)"HTTP/1.1 404 Not Found\r\n"
+                                       "Content-Type: text/plain\r\n"
+                                       "\r\n"
+                                       "Resource not found";
+            return;
+        }
+
+        // write content length into header
+        snprintf(*response_header, BUFFER_SIZE, "HTTP/1.1 200 OK\r\n"
+                                                "Content-Type: text/html\r\n"
+                                                "Content-Length: %ld\r\n"
+                                                "\r\n",
+                 strlen(content));
+
+        *response_content = content;
+    }
+    else
+    {
+        *response_header = (char *)"HTTP/1.1 404 Not Found\r\n"
+                                   "Content-Type: text/plain\r\n"
+                                   "\r\n"
+                                   "Resource not found";
+    }
 }
 
 struct Server server_constructor(int domain, u_long interface, char *port)
@@ -184,32 +276,22 @@ void handle_client(int client_fd, char *buffer)
     }
 
     char *response;
+    char *response_content;
 
     printf("Method: %s\n", request_data.method);
     printf("Path: %s\n", request_data.path);
     printf("Protocol: %s\n", request_data.protocol);
     printf("Host: %s\n", request_data.host);
 
-    // build message
+    build_message(request_data, &response, &response_content);
 
-    // send
+    //  get size of response
 
-    if (strcmp(request_data.method, "GET") == 0)
-    {
-        response = (char *)"HTTP/1.1 200 OK\r\n"
-                           "Content-Type: text/plain\r\n"
-                           "\r\n"
-                           "Successful Request";
-    }
-    else
-    {
-        response = (char *)"HTTP/1.1 404 Not Found\r\n"
-                           "Content-Type: text/plain\r\n"
-                           "\r\n"
-                           "Resource not found";
-    }
-
+    // send file headers with response size
     send(client_fd, response, strlen(response), 0);
+
+    // send file content
+    send(client_fd, response_content, strlen(response_content), 0);
 }
 
 int main()
