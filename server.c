@@ -82,7 +82,10 @@ void parse_request(char *buffer, struct RequestData *request_data)
 
     if (sscanf(line, "%15s %255s %15s", method, path, protocol) != 3)
     {
-        fprintf(stderr, "Malformed request: %s\n", line);
+        char error_msg[BUFFER_SIZE];
+        snprintf(error_msg, sizeof(error_msg), "Malformed request line: '%s'", line);
+        perror(error_msg);
+        free(line);
         return;
     };
 
@@ -186,6 +189,10 @@ void handle_client(int client_fd, char *buffer)
     printf("Path: %s\n", request_data.path);
     printf("Protocol: %s\n", request_data.protocol);
     printf("Host: %s\n", request_data.host);
+
+    // build message
+
+    // send
 
     if (strcmp(request_data.method, "GET") == 0)
     {
