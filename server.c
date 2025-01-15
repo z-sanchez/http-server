@@ -1,5 +1,7 @@
 // gcc server.c -o server
 
+// process get and post, return files on get, echo on post
+
 #include "server.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -39,10 +41,15 @@ void print_ip(struct sockaddr_storage *client_addr)
     printf("\nClient connected: IP=%s, Port: %d\n\n\n", client_ip, client_port);
 }
 
-void read_line(char *buffer, char **line)
+int read_line(char *buffer, char **line)
 {
     // find crlf
     char *crlf = strstr(buffer, CRLF);
+
+    if (crlf == NULL)
+    {
+        return 0;
+    }
 
     // pointer arithmetic to find length of line
     size_t line_length = crlf - buffer;
@@ -61,6 +68,7 @@ void read_line(char *buffer, char **line)
 
     memmove(buffer, crlf + 2, remaining_length); // Shift data
     buffer[remaining_length] = '\0';             // Null-terminate the remaining buffer
+    return 1;
 }
 
 void parse_request(char *buffer, struct RequestData *request_data)
@@ -68,12 +76,12 @@ void parse_request(char *buffer, struct RequestData *request_data)
     static char method[16]; // Buffer to hold the HTTP method
     char path[256];         // Buffer to hold the path
     char protocol[16];      // Buffer to hold the HTTP protocol
+    char host[24];          // Buffer to hold the HTTP host
     char *line = NULL;
     read_line(buffer, &line);
 
     if (sscanf(line, "%15s %255s %15s", method, path, protocol) != 3)
     {
-        // why use fprintf
         fprintf(stderr, "Malformed request: %s\n", line);
         return;
     };
@@ -84,9 +92,22 @@ void parse_request(char *buffer, struct RequestData *request_data)
 
     read_line(buffer, &line);
 
-    request_data->host = strchr(line, ' ');
-    sscanf(line, "Host: %s", request_data->host);
-    // don't free line because then host will be junk, will freeing request data free the allocated line???
+    sscanf(line, "Host: %s", host);
+    request_data->host = host;
+
+    int status = 1;
+
+    while (status == 1)
+    {
+        status = read_line(buffer, &line);
+
+        if (strlen(line))
+        {
+            printf("%s\n", line);
+        }
+    }
+
+    free(line);
 }
 
 struct Server server_constructor(int domain, u_long interface, char *port)
