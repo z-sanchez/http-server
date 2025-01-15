@@ -162,7 +162,7 @@ int get_file(char *requested_path, char **file_content)
         return 0;
     }
 
-    if (fread(*file_content, 1, file_size, file_pointer) != file_size)
+    if (fread(*file_content, 1, file_size, file_pointer) != (size_t)file_size)
     {
         perror("Failed to read file");
         free(*file_content);
