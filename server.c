@@ -289,8 +289,6 @@ void handle_client(int client_fd, char *buffer)
 
     build_message(request_data, &response, &response_content);
 
-    //  get size of response
-
     // send file headers with response size
     send(client_fd, response, strlen(response), 0);
 
