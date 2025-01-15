@@ -1,7 +1,5 @@
 // gcc server.c -o server
 
-// process get and post, return files on get, echo on post
-
 #include "server.h"
 #include <stdio.h>
 #include <stdlib.h>
