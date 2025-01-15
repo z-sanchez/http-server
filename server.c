@@ -116,25 +116,29 @@ void parse_request(char *buffer, struct RequestData *request_data)
 
 int get_file(char *requested_path, char **file_content)
 {
-    char *path;
-    printf("Path in get file: %s\n", requested_path);
+    char *path = requested_path;
+    char url[512];
 
     // if path is root '/' default to index.html
-    if (requested_path[0] == '/')
+    if (path[0] == '/')
     {
-        path = (char *)"./public/index.html";
+        path++;
     }
 
-    // // if path is empty, default to index.html
-    // if (strlen(path) == 0)
-    // {
-    //     path = (char *)"./public/index.html";
-    // }
+    // if path is empty, default to index.html
+    if (strlen(path) == 0)
+    {
+        strcpy(url, "./public/index.html");
+    }
+    else
+    {
+        snprintf(url, sizeof(url), "./public/%s", path);
+    }
 
     // open file
     FILE *file_pointer;
 
-    file_pointer = fopen(path, "r");
+    file_pointer = fopen(url, "r");
 
     // if invalid, return not found
     if (file_pointer == NULL)
