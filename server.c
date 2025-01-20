@@ -76,6 +76,7 @@ void parse_request(char *buffer, struct RequestData *request_data)
     static char path[256];    // Buffer to hold the path
     static char protocol[16]; // Buffer to hold the HTTP protocol
     static char host[24];     // Buffer to hold the HTTP host
+    static char content[BUFFER_SIZE];
     char *line = NULL;
     read_line(buffer, &line);
 
@@ -108,6 +109,10 @@ void parse_request(char *buffer, struct RequestData *request_data)
             printf("%s\n", line);
         }
     }
+
+    strcpy(content, buffer);
+
+    request_data->content = content;
 
     free(line);
 }
@@ -173,6 +178,13 @@ int get_file(char *requested_path, char **file_content)
 
 void build_message(struct RequestData request_data, char **response_header, char **response_content)
 {
+
+    *response_header = (char *)malloc(BUFFER_SIZE);
+    if (*response_header == NULL)
+    {
+        perror("Failed to allocate response header");
+        return;
+    }
     if (strcmp(request_data.method, "GET") == 0)
     {
         // printf("PATH HERE IN BUILD MESSAGE: %s\n", request_data.path);
@@ -198,12 +210,30 @@ void build_message(struct RequestData request_data, char **response_header, char
 
         *response_content = content;
     }
+    else if (strcmp(request_data.method, "POST") == 0)
+    {
+        // Allocate memory for response content for POST
+        *response_content = strdup(request_data.content);
+        if (*response_content == NULL)
+        {
+            perror("Failed to allocate response content");
+            free(*response_header);
+            return;
+        }
+
+        snprintf(*response_header, BUFFER_SIZE, "HTTP/1.1 200 OK\r\n"
+                                                "Content-Type: text/html\r\n"
+                                                "Content-Length: %zu\r\n"
+                                                "\r\n",
+                 strlen(*response_content));
+    }
     else
     {
         *response_header = (char *)"HTTP/1.1 404 Not Found\r\n"
                                    "Content-Type: text/plain\r\n"
                                    "\r\n"
                                    "Resource not found";
+        *response_content = (char *)"Unsupported HTTP Method";
     }
 }
 
@@ -266,11 +296,11 @@ struct Server server_constructor(int domain, u_long interface, char *port)
 void handle_client(int client_fd, char *buffer)
 {
 
-    struct RequestData request_data;
+    struct RequestData *request_data = (struct RequestData *)malloc(sizeof(struct RequestData));
 
-    parse_request(buffer, &request_data);
+    parse_request(buffer, request_data);
 
-    if (!request_data.method)
+    if (!request_data->method)
     {
         const char *response = "HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\n\r\nMalformed request";
         send(client_fd, response, strlen(response), 0);
@@ -280,18 +310,20 @@ void handle_client(int client_fd, char *buffer)
     char *response;
     char *response_content;
 
-    printf("Method: %s\n", request_data.method);
-    printf("Path: %s\n", request_data.path);
-    printf("Protocol: %s\n", request_data.protocol);
-    printf("Host: %s\n", request_data.host);
+    printf("Method: %s\n", request_data->method);
+    printf("Path: %s\n", request_data->path);
+    printf("Protocol: %s\n", request_data->protocol);
+    printf("Host: %s\n", request_data->host);
 
-    build_message(request_data, &response, &response_content);
+    build_message(*request_data, &response, &response_content);
 
     // send file headers with response size
     send(client_fd, response, strlen(response), 0);
 
     // send file content
     send(client_fd, response_content, strlen(response_content), 0);
+
+    free(request_data);
 }
 
 int main()

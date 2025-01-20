@@ -22,6 +22,7 @@ struct RequestData
     char *path;
     char *protocol;
     char *host;
+    char *content;
 };
 
 struct Server server_constructor(int domain, u_long interface, char *port);
